@@ -72,7 +72,7 @@ def month_end_close_email_md(year: int, month: int) -> str:
 
     md.append("Thank you,\n")
     md.append("Travis Pickens\n")
-    md.append("Accounting Manager | CityServiceValcon\n")
+    md.append("Accounting Manager | CityServiceValcon, LLC\n")
 
     return "\n".join(md)
 
