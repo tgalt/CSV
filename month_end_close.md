@@ -43,3 +43,7 @@ Below is the month-end close schedule for September 2025. Please review the sche
 - Issue financial statements.
 
 Thank you,
+
+Travis Pickens
+
+Accounting Manager | CityServiceValcon

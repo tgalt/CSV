@@ -71,6 +71,8 @@ def month_end_close_email_md(year: int, month: int) -> str:
     md.append(f"## **{fmt_long(bd7)} (Business Day 7)**\n- Issue financial statements.\n")
 
     md.append("Thank you,\n")
+    md.append("Travis Pickens\n")
+    md.append("Accounting Manager | CityServiceValcon\n")
 
     return "\n".join(md)
 
