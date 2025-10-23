@@ -14,17 +14,21 @@ import time
 from typing import List, Tuple
 
 import pandas as pd
+import sys
+import math
 
 
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Find combinations in CSV that sum to target")
-    p.add_argument("csv", nargs="?", default="data.csv", help="path to CSV file")
+    p.add_argument("csv", nargs="?", default="data4.csv", help="path to CSV file")
     p.add_argument("--col", default="Amount", help="column name containing numeric values")
     p.add_argument("--target", type=float, default=2245.35, help="target sum (float)")
     p.add_argument("--tol", type=float, default=0.01, help="tolerance for matching target")
     p.add_argument("--max-size", type=int, default=5, help="maximum combination size")
     p.add_argument("--max-matches", type=int, default=50, help="stop after this many matches (0 = unlimited)")
-    p.add_argument("--verbose", action="store_true")
+    p.add_argument("--verbose", action="store_true", help="print progress and timing info")
+    p.add_argument("--timeout", type=float, default=30.0, help="max seconds to search before giving up (0 = no timeout)")
+    p.add_argument("--both-signs", action="store_true", help="search for both +target and -target")
     return p.parse_args()
 
 
@@ -34,7 +38,9 @@ def to_cents(x: float) -> int:
 
 
 def find_combinations(values: List[int], indices: List[int], target: int, max_size: int,
-                      max_matches: int = 0) -> List[List[Tuple[int, int]]]:
+                      max_matches: int = 0,
+                      end_time: float | None = None,
+                      verbose: bool = False) -> List[List[Tuple[int, int]]]:
     """Backtracking search over sorted values with pruning.
 
     values: list of integer cents (sorted ascending)
@@ -45,9 +51,18 @@ def find_combinations(values: List[int], indices: List[int], target: int, max_si
     results: List[List[Tuple[int, int]]] = []
 
     n = len(values)
+    # prefix_sums[i] = sum of values[i:]  (suffix sums) used to prune when remaining values can't reach target
+    suffix_sums = [0] * (n + 1)
+    for i in range(n - 1, -1, -1):
+        suffix_sums[i] = suffix_sums[i + 1] + values[i]
 
     def backtrack(start: int, curr_sum: int, path: List[int]):
         # stop if we've reached desired size or sum
+        # check timeout periodically
+        if end_time is not None and time.time() > end_time:
+            if verbose:
+                print("Timeout reached, stopping search...")
+            raise TimeoutError()
         if curr_sum == target:
             results.append([(indices[i], values[i]) for i in path])
             return
@@ -62,6 +77,12 @@ def find_combinations(values: List[int], indices: List[int], target: int, max_si
             if prev is not None and values[i] == prev:
                 continue
             prev = values[i]
+
+            # pruning: if even taking all remaining values still can't reach target, break early
+            # suffix_sums[i] is sum of values from i..end
+            if curr_sum + suffix_sums[i] < target:
+                # Not enough remaining to reach target
+                break
 
             # pruning: if adding smallest remaining values can't reach target, we still explore;
             # more important: stop when partial sum exceeds target (we check above)
@@ -115,17 +136,32 @@ def main() -> None:
     sorted_indices = list(sorted_indices)
 
     matches = []
-    # Since tolerance window may be >0, we search for exact match to any target in [low, high].
-    # Simpler approach: search for exact target_cents and accept matches within tolerance when reported.
-    # This keeps the search pruning effective.
-    matches = find_combinations(sorted_values, sorted_indices, target_cents, args.max_size, args.max_matches)
+    # run search with a timeout and optional verbose progress
+    timeout = args.timeout
+    end_time = start_time + timeout if timeout > 0 else None
 
-    # Filter matches that are within tolerance (in case rounding produced small mismatches)
+    # wrap find_combinations to check timeout and progress
+    # We will implement a small monitor: if verbose, print elapsed time periodically.
+
+    # Support searching for both +target and -target if requested
+    targets_to_try = [target_cents]
+    if args.both_signs:
+        targets_to_try.append(-target_cents)
+
     final_matches = []
-    for m in matches:
-        s = sum(val for _, val in m)
-        if low_target <= s <= high_target:
-            final_matches.append(m)
+    for t in targets_to_try:
+        try:
+            matches = find_combinations(sorted_values, sorted_indices, t, args.max_size, args.max_matches, end_time, args.verbose)
+        except TimeoutError:
+            if args.verbose:
+                print(f"Search timed out for target {t/100.0}; collecting results so far.")
+            matches = []
+
+        # Filter matches that are within tolerance (in case rounding produced small mismatches)
+        for m in matches:
+            s = sum(val for _, val in m)
+            if abs(s - t) <= tol_cents:
+                final_matches.append((t, m))
 
     elapsed = time.time() - start_time
 
