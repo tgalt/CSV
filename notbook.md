@@ -14,7 +14,7 @@ Run these in the Codespace terminal:
 python -m pip install -U pip
 pip install jupyter ipykernel
 python -m ipykernel install --user --name codespace --display-name "Python (codespace)"
-'''
+
 
 5.	Reload the notebook, then choose the kernel: Python (codespace).
 
